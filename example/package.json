@@ -1,0 +1,15 @@
+{
+  "name": "example",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "leased-clickhouse": "file:../leased-clickhouse"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.1",
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "start": "tsx basic.ts"
+  }
+}

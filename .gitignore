@@ -1,0 +1,7 @@
+node_modules/
+local-db/
+stress-db/
+*.log
+.DS_Store
+pnpm-lock.yaml
+*.txt

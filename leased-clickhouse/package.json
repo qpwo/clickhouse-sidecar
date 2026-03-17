@@ -1,0 +1,18 @@
+{
+  "name": "leased-clickhouse",
+  "version": "1.0.0",
+  "description": "An elegant, zero-config embedded ClickHouse manager for Node.js",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": "./index.mjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "dependencies": {
+    "@clickhouse/client": "^1.10.0"
+  }
+}

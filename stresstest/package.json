@@ -1,0 +1,11 @@
+{
+  "name": "stresstest",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "leased-clickhouse": "file:../leased-clickhouse"
+  },
+  "scripts": {
+    "start": "node test.mjs"
+  }
+}
