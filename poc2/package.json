@@ -1,9 +1,0 @@
-{
-  "name": "poc2",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "leased-clickhouse": "file:../leased-clickhouse",
-    "@clickhouse/client": "^1.10.0"
-  }
-}
