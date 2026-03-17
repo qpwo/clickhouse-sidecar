@@ -12,6 +12,12 @@ if (process.platform === 'win32') {
     throw new Error('leased-clickhouse is only supported on Linux and macOS.');
 }
 
+const socketRegistry = new FinalizationRegistry((socket) => {
+    if (socket && !socket.destroyed) {
+        socket.destroy();
+    }
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const IS_DAEMON = process.env.__SHARED_CLICKHOUSE_DAEMON__ === '1';
 
@@ -81,13 +87,17 @@ async function runDaemon() {
     let chError = null;
     const pendingSockets = new Set();
     let activeClients = 0;
-    let shutdownTimer = null;
+    let drainCheckInterval = null;
     let chProc = null;
 
     let isCleaningUp = false;
     const cleanup = () => {
         if (isCleaningUp) return;
         isCleaningUp = true;
+        if (drainCheckInterval) {
+            clearInterval(drainCheckInterval);
+            drainCheckInterval = null;
+        }
         if (chProc) {
             chProc.kill('SIGTERM');
             setTimeout(() => {
@@ -105,12 +115,57 @@ async function runDaemon() {
         cleanup();
     });
 
+    function getActiveUsage() {
+        return new Promise((resolve) => {
+            const req = http.get(`http://127.0.0.1:${chHttpPort}/?query=SELECT+sum(value)+FROM+system.metrics+WHERE+metric+IN+('HTTPConnection','TCPConnection','Query')`, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => resolve(parseInt(data.trim()) || 0));
+            });
+            req.on('error', () => resolve(999));
+            req.setTimeout(1000, () => { req.destroy(); resolve(999); });
+        });
+    }
+
+    function stopDraining() {
+        if (drainCheckInterval) {
+            clearInterval(drainCheckInterval);
+            drainCheckInterval = null;
+        }
+    }
+
+    function startDraining() {
+        if (drainCheckInterval) return;
+        if (!chHttpPort) {
+            setTimeout(cleanup, 3000);
+            return;
+        }
+        const drainStart = Date.now();
+        let quietSince = null;
+
+        drainCheckInterval = setInterval(async () => {
+            if (isCleaningUp) return;
+
+            if (Date.now() - drainStart > 60000) { stopDraining(); cleanup(); return; }
+
+            const usage = await getActiveUsage();
+            try { fs.appendFileSync(path.join(process.env.CH_DATA_DIR, 'daemon.log'), `Drain check: usage=${usage}\n`); } catch(e){}
+
+            if (usage > 2) {
+                quietSince = null;
+            } else if (!quietSince) {
+                quietSince = Date.now();
+            } else if (Date.now() - quietSince >= 3000) {
+                try { fs.appendFileSync(path.join(process.env.CH_DATA_DIR, 'daemon.log'), `Shutting down due to quietSince >= 3000\n`); } catch(e){}
+                stopDraining();
+                cleanup();
+            }
+        }, 500);
+    }
+
     server.on('connection', (socket) => {
         activeClients++;
-        if (shutdownTimer) {
-            clearTimeout(shutdownTimer);
-            shutdownTimer = null;
-        }
+        stopDraining();
 
         if (chHttpPort) {
             socket.write(JSON.stringify({ port: chHttpPort }) + '\n');
@@ -125,7 +180,7 @@ async function runDaemon() {
             activeClients--;
             pendingSockets.delete(socket);
             if (activeClients <= 0) {
-                shutdownTimer = setTimeout(cleanup, 3000);
+                startDraining();
             }
         });
         socket.on('error', () => {});
@@ -231,7 +286,7 @@ async function runDaemon() {
         pendingSockets.clear();
 
         if (activeClients <= 0) {
-            shutdownTimer = setTimeout(cleanup, 3000);
+            startDraining();
         }
 
     } catch (err) {
@@ -319,13 +374,25 @@ export async function getClient(options = {}) {
         url: `http://127.0.0.1:${port}`
     });
 
-    const origClose = client.close.bind(client);
-    client.close = async () => {
-        socket.destroy();
-        await origClose();
-    };
+    socketRegistry.register(client, socket);
 
-    return client;
+    const wrapper = new Proxy(client, {
+        get(target, prop) {
+            if (prop === 'close') {
+                return async () => {
+                    if (!socket.destroyed) socket.destroy();
+                    return target.close();
+                };
+            }
+            if (typeof target[prop] === 'function') {
+                return target[prop].bind(target);
+            }
+            return target[prop];
+        }
+    });
+
+    socketRegistry.register(wrapper, socket);
+    return wrapper;
 }
 
 export * from '@clickhouse/client';

@@ -4,7 +4,14 @@
   "description": "An elegant, zero-config embedded ClickHouse manager for Node.js",
   "type": "module",
   "main": "index.mjs",
-  "exports": "./index.mjs",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.mjs",
+      "default": "./index.mjs"
+    }
+  },
   "engines": {
     "node": ">=18.0.0"
   },
@@ -12,7 +19,7 @@
     "darwin",
     "linux"
   ],
-  "dependencies": {
-    "@clickhouse/client": "^1.10.0"
+  "peerDependencies": {
+    "@clickhouse/client": ">=1.0.0"
   }
 }

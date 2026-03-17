@@ -5,3 +5,8 @@ stress-db/
 .DS_Store
 pnpm-lock.yaml
 *.txt
+data
+poc-db
+poc-db-*
+test-gc*
+test-usage.mjs

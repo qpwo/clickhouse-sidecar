@@ -1,0 +1,7 @@
+{
+  "name": "poc1",
+  "type": "module",
+  "dependencies": {
+    "leased-clickhouse": "file:../leased-clickhouse"
+  }
+}

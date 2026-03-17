@@ -3,7 +3,7 @@ import { getClient } from 'leased-clickhouse';
 async function run(id) {
     console.log(`Worker ${id} starting...`);
     const db = await getClient({ dataDir: './stress-db' });
-    await db.exec({
+    await db.command({
         query: 'CREATE TABLE IF NOT EXISTS workers (id UInt32, val String) ENGINE = MergeTree ORDER BY id'
     });
     await db.insert({
