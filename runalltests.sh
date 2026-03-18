@@ -4,16 +4,10 @@ set -euo pipefail
 echo "=== Running Stress Test ==="
 node stresstest/test.mjs
 
-echo -e "\n=== Running PoC: False Positive ==="
+echo -e "\n=== Running PoC: Zombie Lease (False Positive) ==="
 node --expose-gc stresstest/poc-false-positive.mjs
 
-echo -e "\n=== Running PoC: False Negative ==="
+echo -e "\n=== Running PoC: Premature Shutdown (False Negative) ==="
 node --expose-gc stresstest/poc-false-negative.mjs
 
-echo -e "\n=== Running PoC: Premature Shutdown ==="
-node --expose-gc stresstest/poc-premature.mjs
-
-echo -e "\n=== Running PoC: Zombie Lease ==="
-node --expose-gc stresstest/poc-zombie.mjs
-
-echo -e "\nAll tests completed."
+echo -e "\nAll tests completed successfully."
