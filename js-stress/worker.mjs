@@ -1,5 +1,5 @@
 /** Worker process that inserts data and explicitly handles expected crashes gracefully. */
-import { getClient } from 'clickhouse-sidecar';
+import { getClient } from '../js-lib/index.mjs';
 
 async function run(id) {
     const db = await getClient({ dataDir: './stress-node-db' });

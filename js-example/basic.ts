@@ -1,5 +1,5 @@
 /** Nontrivial example of using clickhouse-sidecar with TypeScript */
-import { getClient } from 'clickhouse-sidecar';
+import { getClient } from '../js-lib/index.mjs';
 
 async function main() {
     console.log("Acquiring ClickHouse sidecar...");

@@ -7,7 +7,7 @@ def main():
     print("Starting 20 concurrent Python workers. Some will crash intentionally.")
     procs = []
     for i in range(20):
-        p = subprocess.Popen([sys.executable, "python/stresstest/worker.py", str(i)])
+        p = subprocess.Popen([sys.executable, "py-stress/worker.py", str(i)])
         procs.append(p)
 
     for p in procs:

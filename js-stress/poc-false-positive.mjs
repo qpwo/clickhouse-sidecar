@@ -1,4 +1,4 @@
-import { getClient } from 'clickhouse-sidecar';
+import { getClient } from '../js-lib/index.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
