@@ -1,26 +1,11 @@
 """
-ClickHouse Sidecar - An elegant, zero-config embedded ClickHouse manager for Python.
-Provides `get_client(data_dir)` which spawns a ClickHouse daemon if needed.
-The daemon stays alive as long as there are active client sockets or running queries.
+ClickHouse Sidecar - Zero-config embedded ClickHouse manager for Python.
+Spawns a background ClickHouse daemon and manages its lifecycle via lease sockets.
 """
+import os, sys, time, socket, subprocess, json, hashlib, urllib.request, urllib.parse, atexit, weakref, signal, threading
+from contextlib import suppress
 
-import os, sys, time, socket, subprocess, json, hashlib, urllib.request, urllib.parse, atexit, weakref
-
-# Toplevel mutable globals
-DAEMON_SOCK_PATH = ""
-CH_HTTP_PORT = 0
-ACTIVE_SOCKETS = []
-IS_CLEANING_UP = [False]
-CH_PROC = [None]
-DAEMON_DATA_DIR = ""
-DAEMON_SRV = None
-
-def _log(msg):
-    if DAEMON_DATA_DIR:
-        try:
-            with open(os.path.join(DAEMON_DATA_DIR, "daemon.log"), "a") as f:
-                f.write(f"{time.time()}: {msg}\n")
-        except: pass
+G = {"sock_path": "", "http_port": 0, "active_sockets": [], "cleaning_up": False, "proc": None, "data_dir": "", "srv": None}
 
 def get_client(data_dir=".clickhouse", **client_options):
     """Acquire a ClickHouse client, spawning the daemon if necessary."""
@@ -36,17 +21,15 @@ def get_client(data_dir=".clickhouse", **client_options):
 
 def run_daemon(data_dir):
     """Run the sidecar daemon process."""
-    global DAEMON_DATA_DIR, DAEMON_SOCK_PATH
-    DAEMON_DATA_DIR = data_dir
+    G["data_dir"] = data_dir
+    G["sock_path"] = _get_sock_path(data_dir)
     _log(f"Starting sidecar for {data_dir}")
-    DAEMON_SOCK_PATH = _get_sock_path(data_dir)
-    _acquire_lock(DAEMON_SOCK_PATH)
+    _acquire_lock()
     _setup_atexit()
     bin_path = _ensure_clickhouse_binary()
     _kill_old_pid()
     _start_clickhouse(bin_path)
     _wait_for_clickhouse()
-    import threading
     threading.Thread(target=_drain_loop, daemon=True).start()
     _accept_loop()
 
@@ -84,15 +67,20 @@ def _patch_client_for_lease(client, sock):
     orig_close = getattr(type(client), "close", None)
     if orig_close:
         def new_close(self, *args, **kwargs):
-            try: sock.close()
-            except Exception: pass
+            with suppress(Exception): sock.close()
             return orig_close(self, *args, **kwargs)
         client.close = new_close.__get__(client, type(client))
     client._lease_sock = sock
 
-def _acquire_lock(sock_path):
+def _log(msg):
+    """Append a log message to the daemon log."""
+    if not G["data_dir"]: return
+    with open(os.path.join(G["data_dir"], "daemon.log"), "a") as f:
+        f.write(f"{time.time()}: {msg}\n")
+
+def _acquire_lock():
     """Ensure only one daemon runs per socket path."""
-    global DAEMON_SRV
+    sock_path = G["sock_path"]
     if os.path.exists(sock_path):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         if s.connect_ex(sock_path) == 0:
@@ -100,31 +88,31 @@ def _acquire_lock(sock_path):
             sys.exit(0)
         s.close()
         os.remove(sock_path)
-    DAEMON_SRV = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    DAEMON_SRV.bind(sock_path)
-    DAEMON_SRV.listen(128)
+    G["srv"] = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    G["srv"].bind(sock_path)
+    G["srv"].listen(128)
+
+def _cleanup(*_):
+    """Shutdown ClickHouse and clean up socket."""
+    if G["cleaning_up"]: return
+    G["cleaning_up"] = True
+    _log("Cleaning up and exiting...")
+    if os.path.exists(G["sock_path"]):
+        os.remove(G["sock_path"])
+    if G["proc"]:
+        G["proc"].terminate()
+        try:
+            G["proc"].wait(timeout=3.0)
+        except subprocess.TimeoutExpired:
+            G["proc"].kill()
+            G["proc"].wait()
+    sys.exit(0)
 
 def _setup_atexit():
     """Register cleanup handlers."""
-    import signal
-    def cleanup(*_):
-        if IS_CLEANING_UP[0]: return
-        IS_CLEANING_UP[0] = True
-        _log("Cleaning up and exiting...")
-        if os.path.exists(DAEMON_SOCK_PATH):
-            try: os.remove(DAEMON_SOCK_PATH)
-            except Exception: pass
-        if CH_PROC[0]:
-            CH_PROC[0].terminate()
-            try:
-                CH_PROC[0].wait(timeout=3.0)
-            except subprocess.TimeoutExpired:
-                CH_PROC[0].kill()
-                CH_PROC[0].wait()
-        sys.exit(0)
-    signal.signal(signal.SIGINT, cleanup)
-    signal.signal(signal.SIGTERM, cleanup)
-    atexit.register(cleanup)
+    signal.signal(signal.SIGINT, _cleanup)
+    signal.signal(signal.SIGTERM, _cleanup)
+    atexit.register(_cleanup)
 
 def _ensure_clickhouse_binary():
     """Download ClickHouse binary if not present."""
@@ -140,18 +128,16 @@ def _ensure_clickhouse_binary():
 
 def _kill_old_pid():
     """Kill old ClickHouse process if pid file exists."""
-    pid_file = os.path.join(DAEMON_DATA_DIR, "clickhouse.pid")
+    pid_file = os.path.join(G["data_dir"], "clickhouse.pid")
     if not os.path.exists(pid_file): return
-    try: pid = int(open(pid_file).read().strip())
-    except Exception: return
-    import signal
+    with open(pid_file) as f: pid_str = f.read().strip()
+    if not pid_str.isdigit(): return
+    pid = int(pid_str)
     if os.path.exists(f"/proc/{pid}"):
-        try: os.kill(pid, signal.SIGTERM)
-        except Exception: pass
+        with suppress(Exception): os.kill(pid, signal.SIGTERM)
         time.sleep(0.5)
         if os.path.exists(f"/proc/{pid}"):
-            try: os.kill(pid, signal.SIGKILL)
-            except Exception: pass
+            with suppress(Exception): os.kill(pid, signal.SIGKILL)
 
 def _get_free_port():
     """Return an available TCP port."""
@@ -163,94 +149,75 @@ def _get_free_port():
 
 def _start_clickhouse(bin_path):
     """Write config and spawn ClickHouse."""
-    global CH_HTTP_PORT
-    CH_HTTP_PORT = _get_free_port()
+    G["http_port"] = _get_free_port()
     tcp_port = _get_free_port()
-    for d in ["data", "tmp", "user_files"]: os.makedirs(os.path.join(DAEMON_DATA_DIR, d), exist_ok=True)
-    conf = f"<clickhouse><logger><level>none</level><console>false</console></logger><http_port>{CH_HTTP_PORT}</http_port><tcp_port>{tcp_port}</tcp_port><listen_host>127.0.0.1</listen_host><path>{DAEMON_DATA_DIR}/data/</path><tmp_path>{DAEMON_DATA_DIR}/tmp/</tmp_path><user_files_path>{DAEMON_DATA_DIR}/user_files/</user_files_path><users_config>{DAEMON_DATA_DIR}/users.xml</users_config><mark_cache_size>268435456</mark_cache_size></clickhouse>"
+    for d in ["data", "tmp", "user_files"]: os.makedirs(os.path.join(G["data_dir"], d), exist_ok=True)
+    conf = f"<clickhouse><logger><level>none</level><console>false</console></logger><http_port>{G['http_port']}</http_port><tcp_port>{tcp_port}</tcp_port><listen_host>127.0.0.1</listen_host><path>{G['data_dir']}/data/</path><tmp_path>{G['data_dir']}/tmp/</tmp_path><user_files_path>{G['data_dir']}/user_files/</user_files_path><users_config>{G['data_dir']}/users.xml</users_config><mark_cache_size>268435456</mark_cache_size></clickhouse>"
     users = "<clickhouse><profiles><default/></profiles><users><default><password></password><networks><ip>127.0.0.1</ip><ip>::1</ip></networks><profile>default</profile><quota>default</quota><access_management>1</access_management></default></users><quotas><default/></quotas></clickhouse>"
-    open(os.path.join(DAEMON_DATA_DIR, "config.xml"), "w").write(conf)
-    open(os.path.join(DAEMON_DATA_DIR, "users.xml"), "w").write(users)
-    CH_PROC[0] = subprocess.Popen([bin_path, "server", "--config-file", os.path.join(DAEMON_DATA_DIR, "config.xml")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    open(os.path.join(DAEMON_DATA_DIR, "clickhouse.pid"), "w").write(str(CH_PROC[0].pid))
-    _log(f"Spawned ClickHouse PID {CH_PROC[0].pid} on HTTP {CH_HTTP_PORT}")
+    open(os.path.join(G["data_dir"], "config.xml"), "w").write(conf)
+    open(os.path.join(G["data_dir"], "users.xml"), "w").write(users)
+    G["proc"] = subprocess.Popen([bin_path, "server", "--config-file", os.path.join(G["data_dir"], "config.xml")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    open(os.path.join(G["data_dir"], "clickhouse.pid"), "w").write(str(G["proc"].pid))
+    _log(f"Spawned ClickHouse PID {G['proc'].pid} on HTTP {G['http_port']}")
 
 def _wait_for_clickhouse():
     """Poll ClickHouse HTTP ping endpoint."""
     for _ in range(300):
-        try:
-            if urllib.request.urlopen(f"http://127.0.0.1:{CH_HTTP_PORT}/ping", timeout=1).status == 200:
+        with suppress(Exception):
+            if urllib.request.urlopen(f"http://127.0.0.1:{G['http_port']}/ping", timeout=1).status == 200:
                 _log("ClickHouse is ready.")
                 return
-        except Exception:
-            pass
         time.sleep(0.2)
     assert False, "ClickHouse server failed to start within 60 seconds."
 
 def _handle_client_socket(sock):
     """Handle a single client lease socket."""
-    ACTIVE_SOCKETS.append(sock)
-    _log(f"Client socket connected. Total active: {len(ACTIVE_SOCKETS)}")
-    try: sock.sendall((json.dumps({"port": CH_HTTP_PORT}) + "\n").encode())
-    except Exception: pass
+    G["active_sockets"].append(sock)
+    _log(f"Client connected. Active: {len(G['active_sockets'])}")
+    with suppress(Exception): sock.sendall((json.dumps({"port": G["http_port"]}) + "\n").encode())
     while True:
         try:
-            d = sock.recv(1024)
-            if not d: break
-        except Exception as e:
-            _log(f"Socket recv error: {e}")
-            break
-    if sock in ACTIVE_SOCKETS: ACTIVE_SOCKETS.remove(sock)
-    _log(f"Client socket disconnected. Total active: {len(ACTIVE_SOCKETS)}")
-    try: sock.close()
-    except Exception: pass
+            if not sock.recv(1024): break
+        except Exception: break
+    if sock in G["active_sockets"]: G["active_sockets"].remove(sock)
+    _log(f"Client disconnected. Active: {len(G['active_sockets'])}")
+    with suppress(Exception): sock.close()
 
 def _accept_loop():
     """Accept incoming client connections."""
-    import threading
-    while not IS_CLEANING_UP[0]:
-        try:
-            sock, _ = DAEMON_SRV.accept()
+    while not G["cleaning_up"]:
+        with suppress(Exception):
+            sock, _ = G["srv"].accept()
             threading.Thread(target=_handle_client_socket, args=(sock,), daemon=True).start()
-        except Exception:
-            pass
 
 def _get_active_usage():
     """Query ClickHouse for active metrics."""
     try:
-        q = "SELECT count() FROM system.processes WHERE is_initial_query=1 AND query NOT LIKE '%system.processes%'"
-        url = f"http://127.0.0.1:{CH_HTTP_PORT}/?query={urllib.parse.quote(q)}"
-        req = urllib.request.Request(url)
+        q = urllib.parse.quote("SELECT count() FROM system.processes WHERE is_initial_query=1 AND query NOT LIKE '%system.processes%'")
+        req = urllib.request.Request(f"http://127.0.0.1:{G['http_port']}/?query={q}")
         with urllib.request.urlopen(req, timeout=1) as res:
             return int(res.read().decode().strip() or "0")
     except Exception as e:
-        _log(f"Error querying active usage: {e}")
+        _log(f"Error querying usage: {e}")
         return -1
 
 def _drain_loop():
     """Monitor usage and shutdown if idle."""
-    import signal
     quiet_since = None
-    while not IS_CLEANING_UP[0]:
+    while not G["cleaning_up"]:
         time.sleep(0.5)
-
-        if CH_PROC[0] and CH_PROC[0].poll() is not None:
+        if G["proc"] and G["proc"].poll() is not None:
             _log("ClickHouse process died unexpectedly. Exiting.")
             os.kill(os.getpid(), signal.SIGTERM)
             return
-
-        if ACTIVE_SOCKETS:
-            _log(f"Drain loop: ACTIVE_SOCKETS={len(ACTIVE_SOCKETS)}, resetting quiet_since")
+        if G["active_sockets"]:
             quiet_since = None
             continue
-
         usage = _get_active_usage()
-        _log(f"Drain loop: usage={usage}")
         if usage > 0:
             quiet_since = None
         else:
             quiet_since = quiet_since or time.time()
-            _log(f"Drain loop: quiet for {time.time() - quiet_since:.1f}s")
             if time.time() - quiet_since >= 3.0:
                 _log("Idle for 3s with 0 clients, shutting down.")
                 os.kill(os.getpid(), signal.SIGTERM)

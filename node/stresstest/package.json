@@ -4,7 +4,7 @@
   "type": "module",
   "dependencies": {
     "@clickhouse/client": "^1.10.0",
-    "leased-clickhouse": "file:../leased-clickhouse"
+    "clickhouse-sidecar": "file:../clickhouse-sidecar"
   },
   "scripts": {
     "start": "node test.mjs"

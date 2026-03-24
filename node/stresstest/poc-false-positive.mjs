@@ -1,23 +1,26 @@
-import { getClient } from 'leased-clickhouse';
+import { getClient } from 'clickhouse-sidecar';
 import fs from 'node:fs';
 import path from 'node:path';
 
 async function run() {
     console.log("=== PoC 1: False Positive (Zombie Daemon) ===");
 
+    let pid;
     console.log("1. Acquiring client via getClient()...");
-    let db = await getClient({ dataDir: './poc-db-1' });
-
-    const pidFile = path.resolve('./poc-db-1/clickhouse.pid');
-    const pid = parseInt(fs.readFileSync(pidFile, 'utf8'), 10);
-    console.log(`   ClickHouse spawned with PID: ${pid}`);
-
-    console.log("2. Dropping JS reference to the client without calling close()...");
-    // must return from scope to clear stack refs
     await (async () => {
-        db = null;
+        const db = await getClient({ dataDir: './poc-db-1' });
+        const pidFile = path.resolve('./poc-db-1/clickhouse.pid');
+        pid = parseInt(fs.readFileSync(pidFile, 'utf8'), 10);
+        console.log(`   ClickHouse spawned with PID: ${pid}`);
+        console.log("2. Dropping JS reference to the client without calling close()...");
     })();
-    if (global.gc) global.gc();
+
+    // Explicitly force GC outside of the function scope
+    if (global.gc) {
+        global.gc();
+        await new Promise(r => setTimeout(r, 100));
+        global.gc(); // twice for safety
+    }
 
     console.log("3. Simulating an app that stays alive doing other things... waiting 5 seconds.");
     // The daemon would normally shut down after 3 seconds if 0 clients.

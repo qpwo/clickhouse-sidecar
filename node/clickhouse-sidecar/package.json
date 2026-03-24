@@ -1,5 +1,5 @@
 {
-  "name": "leased-clickhouse",
+  "name": "clickhouse-sidecar",
   "version": "1.0.0",
   "description": "An elegant, zero-config embedded ClickHouse manager for Node.js",
   "type": "module",
@@ -20,6 +20,6 @@
     "linux"
   ],
   "peerDependencies": {
-    "@clickhouse/client": ">=1.0.0"
+    "@clickhouse/client": "^1.18.2"
   }
 }

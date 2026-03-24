@@ -1,4 +1,4 @@
-import { getClient } from 'leased-clickhouse';
+import { getClient } from 'clickhouse-sidecar';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -51,9 +51,10 @@ async function run() {
     if (fetchError) {
         console.log(`   FAIL: Query threw an error after ${elapsed}ms:\n   ${fetchError.message}`);
         console.log("   -> The daemon prematurely killed ClickHouse, breaking live HTTP clients!");
+        process.exit(1);
     } else {
-        console.log(`   SUCCESS? Query finished in ${elapsed}ms. (ClickHouse survived SIGTERM)`);
+        console.log(`   SUCCESS: Query finished in ${elapsed}ms. (ClickHouse survived SIGTERM)`);
     }
 }
 
-run();
+run().catch(err => { console.error(err); process.exit(1); });
