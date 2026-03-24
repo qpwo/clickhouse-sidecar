@@ -7,6 +7,9 @@ pkill -9 clickhouse || true
 
 export PYTHONPATH="$(pwd)/python-pkg"
 
+echo "=== Setup Python Environment ==="
+pip3 install clickhouse-connect
+
 echo "=== Python Example ==="
 python3 py-example/main.py
 

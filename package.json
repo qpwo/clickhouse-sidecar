@@ -1,8 +1,0 @@
-{
-  "dependencies": {
-    "@clickhouse/client": "^1.18.2",
-    "@types/node": "^25.5.0",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
-  }
-}

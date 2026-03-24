@@ -12,14 +12,8 @@
       "default": "./index.mjs"
     }
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "os": [
     "darwin",
     "linux"
-  ],
-  "peerDependencies": {
-    "@clickhouse/client": "^1.18.2"
-  }
+  ]
 }
