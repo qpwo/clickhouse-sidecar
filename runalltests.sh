@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Running Stress Test ==="
-node stresstest/test.mjs
+export PYTHONPATH="$(pwd)"
+
+echo "=== Running Basic Test ==="
+python3 tests/test_basic.py
+
+echo -e "\n=== Running Stress Test ==="
+python3 tests/test_stress.py
 
 echo -e "\n=== Running PoC: Zombie Lease (False Positive) ==="
-node --expose-gc stresstest/poc-false-positive.mjs
+python3 tests/poc_false_positive.py
 
 echo -e "\n=== Running PoC: Premature Shutdown (False Negative) ==="
-node --expose-gc stresstest/poc-false-negative.mjs
+python3 tests/poc_false_negative.py
 
 echo -e "\nAll tests completed successfully."

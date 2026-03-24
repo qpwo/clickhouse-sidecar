@@ -10,3 +10,4 @@ poc-db
 poc-db-*
 test-gc*
 test-usage.mjs
+.venv
