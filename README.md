@@ -2,25 +2,17 @@
 
 embedded clickhouse manager for node.js and python.
 
-## guarantees
-- zero config: downloads the binary automatically and binds to available ports.
-- concurrency safe: multiple processes and threads can call it safely. only one daemon will spawn.
-- graceful lifecycle: shuts down automatically 3 seconds after the last client disconnects or the last query finishes.
-- crash resilient: recovers and cleans up if a client crashes (zombie lease prevention) or if the database process is killed.
-
-## non-guarantees
-- not for production clusters.
-- no security. binds to localhost without auth.
-- no persistence guarantees beyond the local data directory.
-- not a service manager. does not start on boot.
+the whole point is that it starts with the first proc using it and dies with the last proc using it.
+it downloads the binary automatically, binds to available ports, and safely shares one daemon across multiple processes and threads.
+it shuts down automatically a few seconds after the last client disconnects or the last query finishes.
+it recovers and cleans up if a client crashes to prevent zombie leases.
+no security. binds to localhost without auth.
 
 ## node.js
 
-requires node.js >= 18.0.0.
-
 npm install clickhouse-sidecar @clickhouse/client
 
-```typescript
+```ts
 import { getClient } from 'clickhouse-sidecar';
 
 async function main() {
@@ -37,11 +29,9 @@ main().catch(console.error);
 
 ## python
 
-requires python >= 3.8.
-
 pip install clickhouse-sidecar clickhouse-connect
 
-```python
+```py
 import clickhouse_sidecar
 
 def main():
