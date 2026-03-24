@@ -1,12 +1,8 @@
 # clickhouse-sidecar
 
-embedded clickhouse manager for node.js and python.
+chdb is too weak but full global install is too much!
 
-the whole point is that it starts with the first proc using it and dies with the last proc using it.
-it downloads the binary automatically, binds to available ports, and safely shares one daemon across multiple processes and threads.
-it shuts down automatically a few seconds after the last client disconnects or the last query finishes.
-it recovers and cleans up if a client crashes to prevent zombie leases.
-no security. binds to localhost without auth.
+Start clickhouse proc on the side! Start it when you first connect and stop it when you last disconnect! Never ever leaves orphans behind. Uses random available port. Use clickhouse like its nineteen ninety sqlite.
 
 ## node.js
 
