@@ -5,7 +5,7 @@ set -euo pipefail
 rm -rf example-db stress-py-db stress-node-db poc-db-* debug-db
 pkill -9 clickhouse || true
 
-export PYTHONPATH="$(pwd)/py-lib"
+export PYTHONPATH="$(pwd)/python-pkg"
 
 echo "=== Python Example ==="
 python3 py-example/main.py

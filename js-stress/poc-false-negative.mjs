@@ -1,4 +1,4 @@
-import { getClient } from '../js-lib/index.mjs';
+import { getClient } from '../node-pkg/index.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 

@@ -1,13 +1,14 @@
-"""Rigorous stress test spawning 20 workers, some of which will intentionally crash."""
 import subprocess
 import sys
+import os
 import clickhouse_sidecar
 
 def main():
     print("Starting 20 concurrent Python workers. Some will crash intentionally.")
     procs = []
+    worker_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "worker.py")
     for i in range(20):
-        p = subprocess.Popen([sys.executable, "py-stress/worker.py", str(i)])
+        p = subprocess.Popen([sys.executable, worker_path, str(i)])
         procs.append(p)
 
     for p in procs:
