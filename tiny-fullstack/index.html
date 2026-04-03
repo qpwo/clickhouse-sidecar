@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>clickhouse-sidecar demo</title>
+<style>
+body { font: 14px sans-serif; margin: 20px; background: #111; color: #eee; }
+button { margin: 0 8px 8px 0; padding: 8px 12px; }
+#stats { white-space: pre-wrap; background: #1b1b1b; padding: 12px; border-radius: 8px; }
+#log { height: 360px; overflow: auto; background: #1b1b1b; padding: 12px; border-radius: 8px; }
+.row { padding: 2px 0; border-bottom: 1px solid #222; font-family: monospace; }
+.error { color: #ff7777; }
+.warn { color: #ffcf66; }
+.debug { color: #8ad2ff; }
+.seed { color: #8aff8a; }
+.manual { color: #ffa8ff; }
+</style>
+</head>
+<body>
+<h1>clickhouse-sidecar live demo</h1>
+<p>Bulk insert synthetic events, query stats, and watch live rows arrive through the sidecar SSE stream.</p>
+<div>
+<button onclick="seed(1000, 250)">seed 1k</button>
+<button onclick="seed(10000, 1000)">seed 10k</button>
+<button onclick="writeManual()">write manual rows</button>
+<button onclick="refreshStats()">refresh stats</button>
+</div>
+<h2>stats</h2>
+<div id="stats">loading...</div>
+<h2>live stream</h2>
+<div id="log"></div>
+<script>
+var statsEl = document.getElementById('stats');
+var logEl = document.getElementById('log');
+var source = new EventSource('/api/stream');
+
+source.addEventListener('ready', refreshStats);
+source.addEventListener('row', onRow);
+source.onerror = function () {
+    addLine({ level: 'error', source: 'browser', msg: 'stream error or reconnect' });
+};
+
+refreshStats();
+setInterval(refreshStats, 3000);
+
+async function seed(count, batch) {
+    var res = await fetch('/api/seed?count=' + count + '&batch=' + batch, { method: 'POST' });
+    var json = await res.json();
+    addLine({ level: 'seed', source: 'ui', msg: 'seeded ' + JSON.stringify(json) });
+    refreshStats();
+}
+
+async function writeManual() {
+    var body = [
+        { level: 'manual', source: 'ui', msg: 'clicked manual 1' },
+        { level: 'manual', source: 'ui', msg: 'clicked manual 2' },
+        { level: 'manual', source: 'ui', msg: 'clicked manual 3' }
+    ];
+    var res = await fetch('/api/write', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    var json = await res.json();
+    addLine({ level: 'manual', source: 'ui', msg: 'wrote ' + JSON.stringify(json) });
+    refreshStats();
+}
+
+async function refreshStats() {
+    var res = await fetch('/api/stats');
+    var json = await res.json();
+    statsEl.textContent = JSON.stringify(json, null, 2);
+}
+
+function onRow(event) {
+    addLine(JSON.parse(event.data));
+}
+
+function addLine(row) {
+    var div = document.createElement('div');
+    div.className = 'row ' + cssClass(row.level);
+    div.textContent = [row.ts || '-', row.level || '-', row.source || '-', row.msg || '-'].join('  ');
+    logEl.prepend(div);
+    while (logEl.childNodes.length > 200) logEl.removeChild(logEl.lastChild);
+}
+
+function cssClass(level) {
+    return String(level || 'info').replace(/[^a-z0-9_-]/gi, '');
+}
+</script>
+</body>
+</html>

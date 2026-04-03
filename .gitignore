@@ -13,3 +13,6 @@ __pycache__/
 *db/
 poc-db-*/
 package-lock.json
+.test-*
+.tmp-*
+.bench-*
