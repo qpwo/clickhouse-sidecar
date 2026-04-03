@@ -1,0 +1,9 @@
+<clickhouse>
+<logger><level>trace</level><console>true</console></logger>
+<http_port>12345</http_port>
+<listen_host>127.0.0.1</listen_host>
+<path>./tmp-ch2/data/</path>
+<tmp_path>./tmp-ch2/tmp/</tmp_path>
+<user_files_path>./tmp-ch2/user_files/</user_files_path>
+<users_config>./tmp-ch2/users.xml</users_config>
+</clickhouse>

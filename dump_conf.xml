@@ -1,0 +1,5 @@
+<clickhouse>
+<logger><level>trace</level><console>true</console></logger>
+<http_port>12345</http_port>
+<path>./tmp-ch/data/</path>
+</clickhouse>

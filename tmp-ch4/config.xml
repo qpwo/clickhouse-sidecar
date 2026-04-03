@@ -1,0 +1,13 @@
+<clickhouse>
+<logger><level>trace</level><console>true</console></logger>
+<listen_host>127.0.0.1</listen_host>
+<tcp_port></tcp_port>
+<http_port></http_port>
+<mysql_port></mysql_port>
+<postgresql_port></postgresql_port>
+<interserver_http_port></interserver_http_port>
+<tcp_port_secure></tcp_port_secure>
+<http_port_secure></http_port_secure>
+<grpc_port></grpc_port>
+<prometheus_port></prometheus_port>
+</clickhouse>

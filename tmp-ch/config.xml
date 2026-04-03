@@ -1,0 +1,11 @@
+<clickhouse>
+<logger><level>trace</level><console>true</console></logger>
+<http_port>12345</http_port>
+<listen_host>127.0.0.1</listen_host>
+<path>./tmp-ch/data/</path>
+<tmp_path>./tmp-ch/tmp/</tmp_path>
+<user_files_path>./tmp-ch/user_files/</user_files_path>
+<users_config>./tmp-ch/users.xml</users_config>
+<mark_cache_size>268435456</mark_cache_size>
+<max_server_memory_usage>1073741824</max_server_memory_usage>
+</clickhouse>
